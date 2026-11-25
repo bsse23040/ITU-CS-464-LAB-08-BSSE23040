@@ -40,7 +40,7 @@ public class ShopItem : MonoBehaviour
         {
             var boost = GameCatalog.Boosts[index];
             nameText.text = boost.name;
-            subText.text = boost.blurb + "  (you have " + PlayerData.BoostCount(index) + ")";
+            subText.text = boost.blurb + ", own " + PlayerData.BoostCount(index);
             buy.SetInteractable(true);
             buy.SetLabel(boost.price.ToString("N0"));
             buy.SetIcon(coinSprite);
