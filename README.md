@@ -1,349 +1,219 @@
-# ITU-CS-464-LAB-07-BSSE23040
+# ITU-CS-464-LAB-08-BSSE23040
 
-CS-464 Game Development, Lab 07. A mobile menu system with 10 screens, by Mohsin Raza Ojla (BSSE23040).
+CS-464 Game Development, Lab 08. My Lab 07 menu system turned into a small playable game with a real loading screen, sound, an Audio Mixer and C# events. By Mohsin Raza Ojla (BSSE23040).
 
-- Demo video: VIDEO_LINK_HERE
+- Demo video: https://drive.google.com/file/d/1YrMjyOypXsmtG67ofiOO6SaJvKLVcLJu/view?usp=sharing (about 3 minutes, with sound). The last part is recorded in a second Unity session, to show the saved volumes after a restart.
 - Unity version: 6000.6.2f1. I only made and tested it in this one.
-- The game is called Comet Dash, a made-up one-thumb space runner. The menus are the real work. The "game" is a tiny stand-in so that the pause menu and the results screen have something to belong to.
+- Built on top of [Lab 07](https://github.com/bsse23040/ITU-CS-464-LAB-07-BSSE23040). The commit history of Lab 07 is kept, and the notes about the menu design are in its README.
+
+The game is called Comet Dash. You steer a ship, dodge rocks, pick up coins and try to reach the portal.
 
 ## How to run it
 
-1. Install Unity 6000.6.2f1 with Unity Hub. Use Add > Add project from disk and pick this folder.
-2. Open `Assets/Scenes/Menus.unity`. Everything is in that one scene.
-3. In the Game view pick a portrait size. I used 1080 x 1920. Then press Play.
-4. Click with the mouse (or tap on a phone). Escape works like the Android back button. On the title screen you tap anywhere.
+1. Install Unity 6000.6.2f1 with Unity Hub. Use Add > Add project from disk and pick this folder. The first import takes a few minutes.
+2. Open `Assets/Scenes/Menus.unity`. Always start from this scene. `Gameplay.unity` is loaded by the game on top of it and does nothing on its own.
+3. In the Game view pick a portrait size (I used 1080 x 1920) and press Play. Check that "Mute Audio" is off in the Game view toolbar.
 
-Coins, ships, stars and settings are saved with PlayerPrefs, so they are still there the next time. Settings > Reset progress (two taps) puts everything back to the start. The project has no sound.
+Controls: click or tap the menus. In a run, hold the mouse button (or your finger) and drag to steer. The round button at the bottom right is the boost. The top left button or Escape pauses.
 
-## The ten screens and how they connect
+How a run works: you have three hearts. A rock takes one. A green repair kit shows up when you are hurt and gives one back. A coin is 25 points and you also get 10 points a second. The boost shields the ship for 3 seconds, makes everything faster, doubles the points and then recharges. Classic reaches the portal after 30 seconds and Time Attack after 22. Endless has no portal.
 
-| # | Screen | Goes forward to | Back goes to |
+| Gameplay | Loading | Audio settings | Pause |
 |---|---|---|---|
-| 1 | Title | Main menu (tap anywhere) | Escape quits |
-| 2 | Main menu | Mode select, Loadout, Shop, Settings, Credits | Title |
-| 3 | Mode select | Level select | Main menu |
-| 4 | Level select | the game | Mode select |
-| 5 | Loadout | Shop (for a ship you don't own) | Main menu, or Results |
-| 6 | Shop | nothing, you buy things here | whichever screen opened it |
-| 7 | Settings | nothing | Main menu, or Pause |
-| 8 | Pause | Resume, Restart, Settings, Quit to menu | Resume |
-| 9 | Results | next sector or try again, retry or Loadout, Menu | Main menu |
-| 10 | Credits | nothing, it rolls by itself | Main menu |
+| <img src="Docs/screens/gameplay.png" width="220"> | <img src="Docs/screens/loading.png" width="220"> | <img src="Docs/screens/audio-settings.png" width="220"> | <img src="Docs/screens/pause.png" width="220"> |
 
-Between 8 and 9 there is the stand-in game screen. It is the 11th screen in the scene but not one of the ten. It has a pause button and a Finish run button. The longer you play before finishing, the higher the score: 100 points is one star, 250 is two and 400 is three. Under 100 counts as a lost run and the results screen changes to match.
+## The full flow
 
 ```mermaid
 flowchart LR
-    T[1 Title] --> M[2 Main menu]
-    M --> MS[3 Mode select] --> L[4 Level select] --> G((game stand-in))
-    M --> LO[5 Loadout] <--> S[6 Shop]
-    M --> S
-    M --> SE[7 Settings]
-    M --> C[10 Credits]
-    G --> P[8 Pause]
-    P --> G
-    P --> SE
-    P --> M
-    G --> R[9 Results]
-    R --> G
-    R --> LO
+    T[Title] --> M[Main menu] --> MS[Mode select] --> L[Level select] --> LD[Loading] --> G[Gameplay]
+    G <--> P[Pause]
+    P <--> S[Settings]
+    P -->|Restart| LD
+    P -->|Quit| M
+    G --> R[Results]
+    R -->|next or replay| LD
     R --> M
 ```
 
-No screen is a dead end. The back arrow is always the round button in the top left, and Escape does the same thing.
+All ten Lab 07 screens still work, with their slides, tweens and safe area layout. The loading screen is new.
 
-## Design choices that apply everywhere
+## Loading
 
-### Colour
+There are two scenes. `Menus.unity` stays loaded the whole time. `Gameplay.unity` is loaded additively on top of it before every run and unloaded when you leave the run. Every way into a run (Start, Next sector, Try again, Retry and Restart) goes through `LoadingScreen.cs`:
 
-The base is a dark indigo night sky with one warm accent, amber. Indigo and yellow-orange sit almost opposite each other on the colour wheel, so amber pops out of the blue without effort. I only use amber for the main button of a screen and for rewards (stars, coins, score). Teal is a calmer second accent, coral only ever means "careful". It is roughly 60% dark indigo, 30% lighter indigo panels and 10% accents.
+1. If an old Gameplay scene is still there, it is unloaded with `UnloadSceneAsync`.
+2. The new one is loaded with `SceneManager.LoadSceneAsync(..., LoadSceneMode.Additive)` and `allowSceneActivation = false`. The first 70% of the bar is `AsyncOperation.progress`. That value stops at 0.9 while activation is held back, so it is divided by 0.9.
+3. The scene is activated and the code waits for `isDone`.
+4. The last 30% is real too. The gameplay sounds and the game music are imported with "Preload Audio Data" switched off, and the loading screen calls `LoadAudioData()` on them one by one and waits for each.
+5. Only then does it open the game screen. The run starts when that screen is shown (`GameplayBridge`), never while loading.
 
-| Colour | Hex | Used for |
+The bar eases toward the real value and is never ahead of it. The screen stays for at least 0.9 seconds so it does not just flash by. Back does nothing on it, and transitions block taps, so you can't get into a half loaded level.
+
+## Audio
+
+### Mixer
+
+`Assets/Audio/MainMixer.mixer` has four groups. Music, SFX and UI are children of Master.
+
+![Audio Mixer](Docs/screens/audio-mixer.png)
+
+| Group | Exposed parameter | AudioSources on it |
 |---|---|---|
-| Sky top and bottom | `#241F6B`, `#0A0922` | the background gradient |
-| Panel | `#2A2575` | cards and panels |
-| Panel high | `#3B34A8` | secondary buttons |
-| Panel low | `#1D1A55` | tracks, info boxes, disabled buttons |
-| Line | `#6C63FF` | thin outlines |
-| Ink | `#F6F4FF` | main text |
-| Dim | `#BDB8F2` | secondary text |
-| Amber | `#FFC233` | main action, rewards, the picked item |
-| Teal | `#2DD4BF` | second accent |
-| Coral | `#FF6B81` | quit, reset |
-| Mint | `#5BE584` | a switch that is on |
+| Master | `MasterVolume` | none directly, everything goes through it |
+| Music | `MusicVolume` | the two music sources of `MusicManager` |
+| SFX | `SfxVolume` | the four voices and the preview source of `SfxPlayer` |
+| UI | `UiVolume` | the one source of `UIAudio` |
 
-Contrast ratios of the text pairs I used (4.5 is the usual minimum): Ink on panel 11.9, Dim on panel 7.0, Ink on a secondary button 8.6, dark text on amber 10.4, dark text on coral 6.8, dark text on teal 7.9, amber on panel 8.0. Only disabled text is lower, 4.5, and that is on purpose.
+That is eight AudioSources in total and every one has a mixer group. My test checks this.
 
-### Type
+### Volume mapping
 
-One family, Inter, in two weights: SemiBold for titles and buttons, Regular for body text. On the 1080 wide canvas the logo is 215, screen titles are 76 to 112, buttons 40 to 78, body text 38 to 48 and the smallest labels 30. Nothing is below 30, which is about 11 dp on a normal phone.
+Loudness is logarithmic, so a slider value is not sent to the mixer as it is. `VolumeSettings.cs` converts it:
 
-### Layout
+```csharp
+public static float ToDecibels(float slider)
+{
+    if (slider <= SilentBelow) return SilentDecibels;      // 0.0001 and below: -80 dB
+    return Mathf.Log10(Mathf.Clamp01(slider)) * 20f;
+}
+```
 
-The canvas scales with the screen width (reference 1080 x 1920), so every phone gets the same width and just more or less height. Things at the top are anchored to the top, buttons to the bottom, and the floating middle parts to a fraction of the height. A `SafeArea` object keeps everything out of notches and rounded corners. Grids and lists (sectors, shop, settings, credits) use layout groups.
+| Slider | 100% | 80% | 50% | 25% | 10% | 0% |
+|---|---|---|---|---|---|---|
+| Mixer | 0 dB | -1.9 dB | -6.0 dB | -12.0 dB | -20.0 dB | -80 dB (muted) |
 
-### Touch targets
+The log of 0 does not exist, which is why zero is handled on its own. The settings screen (Audio tab) shows both the percentage and the decibels.
 
-On a phone that is 1080 px wide, 1 dp is about 2.8 px, so 48 dp is about 135 px. Buttons are 130 to 170 px tall, round buttons are 132 px, and the slider has an invisible 110 px band around it. Neighbouring buttons are at least 20 px apart.
+Saving: the values go into `PlayerPrefs` (`volume_master`, `volume_music`, `volume_sfx`, `volume_ui`) and are written to disk when you leave the settings, when the app goes to the background and when it quits. `AudioBoot` puts them back on the mixer in `Start`, because a mixer value set in `Awake` can be overwritten while the mixer starts. The defaults are 100, 80, 100 and 80%. "Reset progress" does not touch them.
 
-### Feedback
+### Interface sounds
 
-A button gets smaller and a bit darker while it is held, then springs back when you let go. Things that are not allowed shake and show a short message at the top ("Not enough coins"). A locked thing always says why it is locked.
+`UIAudio` is the only thing that plays interface sounds, with one AudioSource. No button has its own. Each button has a tiny `UiSound` script that tells `UIAudio` what happened.
 
-### Hierarchy and grouping
+| Sound | When |
+|---|---|
+| hover | the pointer moves over a button or it gets selected |
+| click | a button is pressed |
+| back | going back a screen |
+| open and close | opening a screen or panel, and closing everything to start over (for example back to the main menu) |
+| pause and resume | opening and leaving the pause menu |
+| success | buying, equipping, claiming the gift, resetting progress |
+| error | not enough coins, a locked mode or sector, pressing a disabled button |
 
-There is one amber button per screen at most. Titles are bigger than body text, and things that belong together sit in one panel with the same spacing: the counters, the stats, the settings rows.
+The screens don't play success or error themselves. They call `UiFeedback.Success()` or `UiFeedback.Error()`, which raise events that `UIAudio` listens to.
 
-### Motion
+### Gameplay sounds
 
-All the motion comes from `Tween.cs`, which I wrote myself (coroutines plus easing functions, no tween package). It runs on unscaled time, so the menus still animate while the pause menu has set `Time.timeScale` to 0.
+`GameSfx` plays seven of them: coin, hit, heal, boost, death, win and lose. `SfxPlayer` takes turns between four AudioSources and uses `PlayOneShot`, so they can overlap. The ones that repeat get a small random pitch change (coin up to 9%, hit 8%, boost 4%) so they don't sound like a machine.
 
-| Ease | Where | Why |
+### Music
+
+Three looping tracks and two AudioSources. To change track, `MusicManager` starts the new one on the free source and crossfades over 1.5 seconds. The two volumes follow sine and cosine (an equal power fade), so the middle does not dip.
+
+| Where | Track |
+|---|---|
+| menus | `music_menu`, calm |
+| loading | whatever was already playing |
+| gameplay | `music_game`, faster |
+| results | `music_results` |
+
+### While paused
+
+Pause sets `Time.timeScale = 0` and `AudioListener.pause = true`.
+
+| Audio | While paused | Why |
 |---|---|---|
-| OutCubic | screens sliding in, things rising into place | fast start and a gentle stop, so it feels quick but calm |
-| InOutCubic | the screen that leaves, the switch knob | soft at both ends, good for moving between two resting places |
-| InCubic | things leaving (old ship, toast, old tab) | speeds up as it goes, so it gets out of the way |
-| OutBack | pop-ins, the logo, panels, buttons springing back | a small overshoot says "this just arrived" |
-| OutElastic | the stars on the results screen | a springy bounce, kept for the biggest reward only |
-| OutQuad and OutCubic | coin counters and the score count-up | fast first, slows down near the final number so it can be read |
-| InOutSine | floating ship and planet, the pulsing "tap to start" | smooth to and fro, no hard turning point |
-| Linear | the credits roll, the fading shake | constant speed is what makes credits easy to read |
-
-Shared transitions live in `ScreenManager`. Going forward, the new screen slides in from the right (OutCubic, 0.38 s) while it fades in, and the old one slides out to the left (InOutCubic, not as far) while it fades out. Going back is the mirror image. The pause menu is an overlay, so it fades in over the game instead of sliding. A see-through layer blocks taps while a transition runs, so you can't double tap into a broken state.
-
-## Screen by screen
-
-Each section has the annotated colour screenshot (the numbers match the list under it), then the plain colour screenshot next to its greyscale copy. The greyscale copies are the colour screenshots with the saturation taken out (luminance, not an average of the channels).
-
-### 1. Title
-
-![Title annotated](Docs/screens/01-title-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/01-title-colour.png" width="330"> | <img src="Docs/screens/01-title-greyscale.png" width="330"> |
-
-Purpose: a calm first screen with nothing to decide. You just start.
-
-1. The logo is by far the biggest thing. It has a dark outline and a soft shadow (a custom TextMesh Pro material) so it stays readable over the stars. COMET is white and DASH is amber.
-2. The tagline is much smaller and dimmer, so it clearly comes second.
-3. The planet and the comet that crosses the sky now and then fill the empty middle. Nothing there can be tapped and nothing is brighter than the logo.
-4. "TAP TO START" pulses. The whole screen is the button, and the pulse is what says so.
-
-Motion: the logo drops in with a move (OutBack, 0.8 s) plus a fade (OutQuad, 0.4 s), and the overshoot makes it look like it landed. The tagline fades in 0.55 s later, then the prompt, so you read them in that order. The prompt then loops between full and 35% opacity (InOutSine, 0.9 s). A sine has no sharp turning point, so it looks like breathing and not blinking. The planet floats 14 px up and down (InOutSine, 2.4 s). The comet crosses with OutQuad (1.6 s) and waits 3.5 s before the next one.
-
-Greyscale: the white logo, the grey planet and the dim prompt are easy to tell apart. I changed nothing.
-
-### 2. Main menu
-
-![Main menu annotated](Docs/screens/02-main-menu-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/02-main-menu-colour.png" width="330"> | <img src="Docs/screens/02-main-menu-greyscale.png" width="330"> |
-
-Purpose: the hub. Everything starts here and the obvious thing to do is Play.
-
-1. Play is the biggest button, the only amber one, and it has an icon.
-2. Loadout and Shop are smaller and blue, also with icons.
-3. Settings and Credits are outline only, so they are there but quiet.
-4. Coins and gems sit together in the top right, where players look for them.
-5. The ship you have equipped floats over a teal glow, so the menu shows your own progress.
-6. Who you are (level badge and name) is in the top left.
-
-Motion: the blocks pop in from top to bottom (scale 0.85 to 1 with OutBack in 0.4 s, fade OutQuad, 0.07 s apart), which is the reading order and leads the eye down to Play. The ship floats 16 px up and down (InOutSine, 1.8 s). Buttons shrink to 0.94 on press (OutQuad, 0.08 s) and spring back with OutBack (0.25 s).
-
-Greyscale: Play is the biggest light area, the blue buttons are mid grey and the outline buttons are the darkest, so the three levels of importance still show. I changed nothing.
-
-### 3. Mode select
-
-![Mode select annotated](Docs/screens/03-mode-select-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/03-mode-select-colour.png" width="330"> | <img src="Docs/screens/03-mode-select-greyscale.png" width="330"> |
-
-Purpose: choose how to play before choosing a sector.
-
-1. The picked card has a thick amber border and a tick badge. The border is also the lightest outline in greyscale.
-2. Endless is locked: a darker card, dim text, a lock icon and a sentence that says how to unlock it. Tapping it shakes it and shows a message.
-3. Next is at the bottom, where the thumb already is.
-4. The back arrow is in the same place as on every other screen.
-5. Each card has the same parts in the same places: icon, name and one line of text.
-
-Motion: the cards rise into place one after the other (move OutCubic 0.45 s, fade OutQuad, 0.09 s apart). When you pick one, the border changes colour (OutQuad, 0.2 s), the card grows to 1.02 (OutBack, 0.3 s) and the tick pops in (OutBack, 0.35 s). A locked card shakes for 0.4 s with a swing that dies away (linear, so it fades evenly) and a message drops in with OutBack and leaves with InCubic.
-
-Greyscale: the picked, normal and locked cards come out as three different greys, and the lock icon and the text say it as well. I changed nothing.
-
-### 4. Level select
-
-![Level select annotated](Docs/screens/04-level-select-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/04-level-select-colour.png" width="330"> | <img src="Docs/screens/04-level-select-greyscale.png" width="330"> |
-
-Purpose: pick one of 12 sectors and see how you did in it. The tiles are a 3 x 4 `GridLayoutGroup`.
-
-1. The picked tile has a thick amber border.
-2. Earned stars are filled and the missing ones are outlines, so you can see what is still possible.
-3. A locked tile is darker, has a lock and no number.
-4. The panel under the grid repeats the name, best score and stars of the picked sector, right above Start.
-5. Start is amber, full width and at the bottom.
-6. A small teal chip reminds you which mode you chose.
-
-Motion: the tiles pop in as a wave from the top left corner (scale 0.7 to 1 with OutBack, delayed by row plus column times 0.05 s). The wave makes it feel like a map and not a list. Picking a tile gives it a small punch (1.08 back to 1, OutBack, 0.35 s) and the info panel punches too, so the eye follows the change.
-
-Greyscale: locked tiles are clearly darker than open ones, and the picked tile is the only one with a bright border. I changed nothing.
-
-### 5. Loadout
-
-![Loadout annotated](Docs/screens/05-loadout-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/05-loadout-colour.png" width="330"> | <img src="Docs/screens/05-loadout-greyscale.png" width="330"> |
-
-Purpose: look at the ships, compare their stats and equip one.
-
-1. The stage can be swiped as well as tapped.
-2. The arrows are 132 px circles.
-3. A stat is a word plus a bar, each bar in its own colour (amber, teal, coral), so it still reads without the colour.
-4. The Equipped button is dim but keeps a tick and the word EQUIPPED. For a ship you don't own the same button becomes "UNLOCK 800" with a lock, and pressing it opens the shop.
-5. The coin and gem counters stay visible while you decide what to buy.
-6. Four dots show which of the four ships you are looking at.
-
-Motion: when you browse, the ship slides out and fades (InCubic, 0.16 s), then the next one slides in from the other side (OutCubic, 0.3 s), in the direction of the arrow or swipe. The stat bars grow from zero (OutCubic, 0.5 s), each one 0.08 s after the one before. Equipping gives the ship a punch to 1.15 with OutBack.
-
-Greyscale: the three stat bars are slightly different greys but each has its label, so nothing depends on colour. The disabled button is the dimmest thing but its tick and word are still readable. I changed nothing.
-
-### 6. Shop
-
-![Shop annotated](Docs/screens/06-shop-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/06-shop-colour.png" width="330"> | <img src="Docs/screens/06-shop-greyscale.png" width="330"> |
-
-Purpose: spend coins on ships and boosts and claim the free daily gift. The cards are a two column `GridLayoutGroup`.
-
-1. The daily gift banner has an amber outline and sits right under the counters, so the free thing is seen first.
-2. Ships and Boosts are tabs. The amber pill shows which one is open, and the label on it is dark.
-3. The price is the button, with the coin icon and the number, so there is nothing else to tap.
-4. Something you own goes dim and says OWNED with a tick. It can't be pressed.
-5. Coins and gems stay at the top.
-
-Motion: when you switch tabs the old grid slides 120 px and fades out (InCubic, 0.2 s) while the new one slides in from the same side (OutCubic, 0.32 s), and the pill under the labels slides across (OutCubic, 0.25 s). When you buy something the card punches (1.06, OutBack) and the coin number counts down (OutQuad, 0.6 s) instead of jumping, so you can see what it cost. With too few coins the card shakes and a message says why. Claiming the gift punches the button, counts the coins up and turns the button into a dim TOMORROW.
-
-Greyscale: the OWNED button is clearly dimmer than the price buttons, and the amber tab is the lightest area of the tab bar. I changed nothing.
-
-### 7. Settings
-
-![Settings annotated](Docs/screens/07-settings-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/07-settings-colour.png" width="330"> | <img src="Docs/screens/07-settings-greyscale.png" width="330"> |
-
-Purpose: change how fast the ship follows your finger, vibration, notifications and graphics quality. Every change is saved straight away.
-
-1. The steering slider has an 88 px handle and a 110 px tall touch band. The percentage is written next to the name, and the value really changes how quickly the ship follows your finger in the game screen.
-2. A switch has the word ON or OFF written inside it and the knob moves to the other side, so the state isn't only a colour.
-3. Low, Medium and High is a segmented control. Exactly one is picked and it gets the amber pill.
-4. Reset progress is kept apart from the rest and needs two taps. The first tap changes the label to "TAP AGAIN TO CONFIRM" and draws a coral border, and it relaxes again after 3 seconds.
-5. The rows share one panel, with a thin divider between them and an icon in front of each name (a vertical layout group lays them out).
-
-Motion: the rows pop in one after another (OutBack and OutQuad). The switch knob slides with InOutCubic (0.22 s) and the track changes colour with the same curve, so the two move together. The pill on the segmented control moves with OutCubic (0.25 s).
-
-Greyscale: this is the one place where I had to change something. In my first version the "ON" text was white on a bright green track and the white knob almost vanished in greyscale. I made the ON text dark and gave the knob a dark rim, then checked again. Now both are clear.
-
-### 8. Pause
-
-![Pause annotated](Docs/screens/08-pause-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/08-pause-colour.png" width="330"> | <img src="Docs/screens/08-pause-greyscale.png" width="330"> |
-
-Purpose: stop the game without losing it and offer the four things you may want to do next.
-
-1. It is an overlay. The game stays visible but dimmed behind it, and `Time.timeScale` is 0 so the score really stops (my test checks that).
-2. Resume is amber and the biggest button.
-3. Quit to menu is coral, comes last, and has both a home icon and words.
-4. The sector name and the current score are at the top of the panel.
-5. Settings opens the settings screen, and its back arrow comes back here.
-
-Motion: the dark layer fades to 72% (OutQuad, 0.25 s) while the panel scales from 0.82 to 1 with OutBack (0.38 s), and the four buttons pop in after each other. Closing it fades the overlay out with InQuad (0.2 s), so it leaves faster than it arrived.
-
-Greyscale: Resume is clearly the lightest. Quit is a bit lighter than Restart and Settings (coral is brighter than the blue) but it also has its own icon and words, so it doesn't depend on that. I changed nothing.
-
-### 9. Results
-
-![Results annotated](Docs/screens/09-results-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/09-results-colour.png" width="330"> | <img src="Docs/screens/09-results-greyscale.png" width="330"> |
-
-Purpose: tell the player how the run went, most important thing first, and say what to do next. A lost run uses the same screen. It says "Run over", the stars stay empty and the buttons become Try again, Loadout and Menu.
-
-1. The stars come first and the middle one is the biggest. Earned stars are filled amber, missing ones are outlines.
-2. The score is the biggest number, in white on the panel.
-3. The NEW BEST badge only appears when the score really is a new best.
-4. Next sector is amber and full width. Retry and Menu are smaller and blue.
-5. Score, coins earned and best score sit together in one panel.
-6. The title has an outline, like the logo, because this is the big moment.
-
-Motion: everything is revealed in order. The title drops in (OutBack, 0.55 s), the stars pop one by one (OutElastic, 0.75 s, 0.3 s apart), the score counts up (OutCubic, 1.2 s), the coins count up (OutQuad, 0.9 s), the badge pops (OutBack, 0.5 s) and last the buttons rise (OutCubic, 0.45 s), so the eye ends on what to do next. OutElastic is only used here. It is the strongest curve I use and I kept it for the strongest moment.
-
-Greyscale: the stars, the score and the amber button are the lightest things, in the same order as in colour. I changed nothing.
-
-### 10. Credits
-
-![Credits annotated](Docs/screens/10-credits-annotated.png)
-
-| Colour | Greyscale |
-|---|---|
-| <img src="Docs/screens/10-credits-colour.png" width="330"> | <img src="Docs/screens/10-credits-greyscale.png" width="330"> |
-
-Purpose: say who made what and where the font and the ideas come from.
-
-1. The text rolls up by itself at a constant 90 px per second. If you touch the screen it stops so you can scroll by hand, and it carries on 1.5 seconds after you let go.
-2. Headings are amber spaced capitals and the content is white.
-3. The back arrow is always there.
-4. The logo uses the same outlined style as the title screen.
-
-Motion: the roll is a Linear tween. A constant speed is the one case where easing would make things worse, because the text would speed up and slow down while you are reading it.
-
-Greyscale: the amber headings turn into a mid grey while the body text stays almost white, so they are different, and the headings are also small spaced capitals. I changed nothing.
-
-## What I changed after looking at the greyscale pictures
-
-I looked at all ten greyscale copies. Only the switches on the settings screen needed a fix (see screen 7). In the other places where two things could have merged, such as the quit button next to the blue buttons or locked and open tiles, there was already an icon, a word, a border or a different brightness.
+| gameplay sounds | held, they carry on after Resume | they belong to the frozen game |
+| music | keeps playing, ducked to 35% | silence feels broken, and you can still set the music volume |
+| interface sounds | play normally | the pause menu has to click |
+| SFX slider test sound | plays | so you can set the volume from the pause menu |
+
+The music, UI and test sources have `ignoreListenerPause` on. The music stays ducked in the settings if you opened them from the pause menu.
+
+## C# events
+
+The gameplay is split into publishers, which keep the rules and numbers, and listeners, which react. A publisher does not know who is listening. All events are raised with `?.Invoke`. Listeners add themselves with `+=` in `OnEnable` and remove themselves with `-=` in `OnDisable`.
+
+| Publisher | Event | Subscribers |
+|---|---|---|
+| `ShipHealth` | `Damaged(hearts, max)` | `RunHud`, `GameSfx`, `SparkBurst`, `ScreenShake`, `HitFlash` |
+| `ShipHealth` | `Healed(hearts, max)` | `RunHud`, `GameSfx`, `SparkBurst`, `HitFlash` |
+| `ShipHealth` | `Died` | `RunController`, `GameSfx`, `SparkBurst`, `ScreenShake` |
+| `FallingField` | `Collected(kind, position)` | `RunController`, `GameSfx`, `SparkBurst` |
+| `FallingField` | `Smashed(position)` | `GameSfx`, `SparkBurst` |
+| `ShipBoost` | `BoostStarted(seconds)` | `GameSfx`, `SparkBurst` |
+| `RunController` | `GameStarted` | `RunHud` |
+| `RunController` | `ScoreChanged`, `CoinsChanged`, `ProgressChanged` | `RunHud` |
+| `RunController` | `GameWon(score)` and `GameLost(score)` | `RunHud`, `GameSfx`, `RunOutcome` |
+| `ScreenManager` | `ScreenChanged(from, to, kind)` | `UIAudio`, `MusicManager`, `GameplayBridge` |
+| `UiFeedback` | `Succeeded`, `Failed` | `UIAudio` |
+
+The independent listeners are the HUD (`RunHud`), sound (`GameSfx`), sparks (`SparkBurst`), camera shake (`ScreenShake`), the hit flash (`HitFlash`) and saving the result (`RunOutcome`).
+
+Two notes. The game is drawn on a UI canvas, where a Particle System would be hidden behind it, so the sparks are a small pool of UI images. For the same reason the "camera" shake moves the play field and leaves the HUD still.
+
+### Code excerpt
+
+The publisher declares and raises the event (`ShipHealth.cs`):
+
+```csharp
+public event Action<int, int> Damaged;          // hearts left, most there can be
+
+public bool TakeHit(int amount = 1)
+{
+    if (Current <= 0 || Shielded || Hurt) return false;
+    Current = Mathf.Max(0, Current - amount);
+    safeUntil = Time.time + safeSeconds;
+    Damaged?.Invoke(Current, max);
+    if (Current == 0) Died?.Invoke();
+    return true;
+}
+```
+
+A listener subscribes and unsubscribes (`HitFlash.cs`, `Healed` left out here):
+
+```csharp
+void OnEnable()
+{
+    health.Damaged += OnDamaged;
+}
+
+void OnDisable()
+{
+    health.Damaged -= OnDamaged;
+}
+
+void OnDamaged(int current, int max) { Show(hurt, 0.34f); }
+```
+
+`UiFeedback` has static events, so unsubscribing matters even more there: a static event would keep a destroyed listener alive.
 
 ## How I tested it
 
-I wrote an editor script (it is not in the repo) that opens the scene in play mode and clicks the real buttons through the whole menu: title, main menu, mode, level, game, pause, settings and back, results, loadout, shop (buying, not having enough coins, boosts, the gift), reset, credits, and a second run to the next sector. After every step it checks which screen is open and what the data says. That was 52 checks and all of them pass, and nothing logged an error. While I was building it, it caught three real bugs: a back button loop in the pause menu, the very first tween of a session cancelling itself, and the loadout forgetting which ship you were looking at when you came back from the shop.
+I wrote an editor script (not in the repo) that plays the game in play mode at 1080 x 1920, presses the real buttons and checks the result after each step. It covers the loading bar (never backwards, never ahead of the real progress, no run before it finishes), the events and how many listeners they have, switching a listener off and on, win, lose, restart and quit, the pause behaviour, every volume slider at 100, 50, 10 and 0% against the real mixer value, the routing of every AudioSource and the old menu features. A second run in a new Unity session checks that the saved volumes come back. All 101 checks pass and no errors were logged.
 
-## Credits and references
+## Credits
 
-- Font: [Inter](https://github.com/rsms/inter) by Rasmus Andersson and the Inter Project Authors, SIL Open Font License 1.1. I used the copy that comes with the Unity editor. The license text is in `Assets/Fonts/Inter-LICENSE.txt`.
-- Engine and packages: Unity 6000.6.2f1, the Universal Render Pipeline (URP), uGUI and TextMesh Pro.
-- Art: every sprite (rounded boxes, icons, ships, planet, comet, rocks) is drawn by my own code in an editor script. There are no AI-generated images, no downloaded art and no asset store packages.
-- Easing curves: the formulas are the usual ones from [easings.net](https://easings.net) (Robert Penner's easing equations). The tween code around them is mine.
-- Inspiration only: the lobby, loadout and shop style of PUBG MOBILE (a dark screen with one bright main button, a ship or character to look at, and a currency bar) and the one-thumb runner menus of Subway Surfers (bright cards, a level map, a results screen with a count-up). I took no assets or code from either game, and the colours, icons and layouts are my own.
-- Course: the CS-464 lecture notes on colour, type, hierarchy and motion.
+- Music and sound effects: all 19 files in `Assets/Audio` are made by [`Docs/make_audio.py`](Docs/make_audio.py), a Python script written for this project that builds each sound from basic waves and noise. No samples, no downloaded audio, no AI audio generator and nothing from a commercial game, so there is no third party audio licence to list. Run `python Docs/make_audio.py` to make them again.
+- Font: [Inter](https://github.com/rsms/inter) by Rasmus Andersson and the Inter Project Authors, SIL Open Font License 1.1. The license text is in `Assets/Fonts/Inter-LICENSE.txt`.
+- Art: every sprite is drawn by my own code. No AI-generated images, downloaded art or asset store packages.
+- Engine and packages: Unity 6000.6.2f1, the Universal Render Pipeline, uGUI and TextMesh Pro.
+- Easing formulas from [easings.net](https://easings.net) (Robert Penner's equations).
+- Inspiration only: the lobby and shop style of PUBG MOBILE and the one-thumb runner feel of Subway Surfers. No assets, audio or code from either game.
 
 ## Folders
 
 ```
-Assets/Scenes     Menus.unity, the only scene
-Assets/Scripts    ScreenManager, one script per screen, Tween, PlayerData and some small widgets
-Assets/Art/UI     the sprites (PNG, drawn in code)
-Assets/Fonts      Inter, its TextMesh Pro font assets and the license
-Docs/screens      colour, annotated and greyscale screenshots used above
+Assets/Scenes             Menus.unity (start here) and Gameplay.unity
+Assets/Scripts            screens, ScreenManager, LoadingScreen, saved data and widgets
+Assets/Scripts/Audio      VolumeSettings, UIAudio, UiSound, MusicManager, SfxPlayer, AudioBoot
+Assets/Scripts/Gameplay   publishers, listeners and GameplayBridge
+Assets/Audio              MainMixer and the sound files
+Assets/Art, Assets/Fonts  sprites and Inter
+Docs                      screenshots and the audio script
 ```
 
 ## Git
 
-I worked on the `development` branch with small commits: data and tween code first, then the screens, then the sprites and the scene, then fixes. It was merged into `main` with a pull request.
+I worked on the `development` branch, starting from the finished Lab 07, and merged it into `main` with a pull request.
