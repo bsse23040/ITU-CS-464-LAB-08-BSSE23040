@@ -2,8 +2,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// Steering, vibration, notifications and graphics quality. Every change is saved straight away,
-// there is no "apply" button to forget. Resetting progress needs two taps so it cannot happen by accident.
+// Two tabs: Audio (the four mixer volumes) and Game (steering, vibration, notifications and graphics
+// quality). Every change is saved straight away, there is no "apply" button to forget.
+// Resetting progress needs two taps so it cannot happen by accident. It leaves the volumes alone.
 public class SettingsScreen : UIScreen
 {
     [SerializeField] Slider steering;
@@ -14,6 +15,10 @@ public class SettingsScreen : UIScreen
     [SerializeField] StyledButton reset;
     [SerializeField] Image resetBorder;
     [SerializeField] RectTransform[] popItems;
+    [SerializeField] SegmentedControl tabs;
+    [SerializeField] GameObject audioPage;
+    [SerializeField] GameObject gamePage;
+    [SerializeField] VolumeSlider[] volumes;
 
     bool armed;
     int armTicket;
@@ -38,19 +43,36 @@ public class SettingsScreen : UIScreen
             ApplyQuality();
         };
         reset.Button.onClick.AddListener(OnReset);
+        tabs.Changed += ShowTab;
+    }
+
+    void ShowTab(int index)
+    {
+        audioPage.SetActive(index == 0);
+        gamePage.SetActive(index == 1);
+        Disarm();
+        var page = (RectTransform)(index == 0 ? audioPage : gamePage).transform;
+        UIAnim.PopIn(page, 0f, 0.96f);
     }
 
     public override void OnOpen()
     {
+        tabs.Select(0, false);
+        audioPage.SetActive(true);
+        gamePage.SetActive(false);
         Load();
         Disarm();
         for (int i = 0; i < popItems.Length; i++)
             UIAnim.PopIn(popItems[i], 0.05f + i * 0.06f);
     }
 
+    // the sliders are written to disk when the player leaves, not on every small drag
+    public override void OnClose() { VolumeSettings.Save(); }
+
     // put the controls on the saved values without firing the change events
     void Load()
     {
+        foreach (var v in volumes) v.Load();
         steering.SetValueWithoutNotify(PlayerData.Steering);
         steeringValue.text = Mathf.RoundToInt(PlayerData.Steering * 100f) + "%";
         vibration.Set(PlayerData.Vibration, false);
@@ -81,6 +103,7 @@ public class SettingsScreen : UIScreen
         Load();
         Disarm();
         Toast.Show("Progress reset");
+        UiFeedback.Success();
     }
 
     void Disarm()

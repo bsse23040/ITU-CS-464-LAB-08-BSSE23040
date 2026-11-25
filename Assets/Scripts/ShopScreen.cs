@@ -96,11 +96,13 @@ public class ShopScreen : UIScreen
             UIAnim.Punch(card, 1.06f);
             string bought = item.IsShip ? GameCatalog.Ships[item.Index].name : GameCatalog.Boosts[item.Index].name;
             Toast.Show(bought + (item.IsShip ? " unlocked" : " added"));
+            UiFeedback.Success();
         }
         else
         {
             Tween.Shake(card);
             Toast.Show("Not enough coins");
+            UiFeedback.Error();
         }
     }
 
@@ -110,6 +112,7 @@ public class ShopScreen : UIScreen
         PlayerData.ClaimGift(giftCoins);
         UIAnim.Punch(giftButton.transform, 1.1f);
         Toast.Show("+" + giftCoins + " coins");
+        UiFeedback.Success();
         RefreshAll();
     }
 }

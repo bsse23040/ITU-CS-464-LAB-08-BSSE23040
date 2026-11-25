@@ -117,6 +117,7 @@ public class LoadoutScreen : UIScreen
         if (PlayerData.OwnsShip(viewing))
         {
             PlayerData.Equip(viewing);
+            UiFeedback.Success();
             UIAnim.Punch(shipRect, 1.15f);
             RefreshAction();
         }

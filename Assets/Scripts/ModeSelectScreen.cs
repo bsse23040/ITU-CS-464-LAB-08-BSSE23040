@@ -41,6 +41,7 @@ public class ModeSelectScreen : UIScreen
         {
             Tween.Shake((RectTransform)cards[i].transform);
             Toast.Show("Reach sector " + GameCatalog.Modes[i].unlockLevel + " to unlock " + GameCatalog.Modes[i].name);
+            UiFeedback.Error();
             return;
         }
         if (i == GameSession.mode) return;
