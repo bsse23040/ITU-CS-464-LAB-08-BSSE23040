@@ -2,7 +2,7 @@ using UnityEngine;
 
 public enum ScreenId
 {
-    Title, MainMenu, ModeSelect, LevelSelect, Loadout, Shop, Settings, Gameplay, Pause, Results, Credits
+    Title, MainMenu, ModeSelect, LevelSelect, Loadout, Shop, Settings, Gameplay, Pause, Results, Credits, Loading
 }
 
 // The base class for every screen. The ScreenManager shows and hides screens and calls

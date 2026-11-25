@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,7 +10,12 @@ using UnityEngine.UI;
 //   Back()         goes back along the history. The same slide, the other way round.
 //   OpenFresh(id)  forgets the history. Used for "Menu" buttons and after quitting a run.
 //
+// Every change of screen is announced with the ScreenChanged event, so the sounds, the music and the
+// game can react without the ScreenManager knowing about any of them.
+//
 // Overlays (the pause menu) fade and scale in over the screen below them, which stays visible.
+public enum NavKind { Open, Back, Fresh }
+
 public class ScreenManager : MonoBehaviour
 {
     public static ScreenManager Instance { get; private set; }
@@ -26,6 +32,11 @@ public class ScreenManager : MonoBehaviour
     bool busy;
 
     public ScreenId Current => current;
+
+    public event Action<ScreenId, ScreenId, NavKind> ScreenChanged;     // from, to, how
+
+    // true while the screen is the current one or somewhere behind it (Back would reach it)
+    public bool InStack(ScreenId id) => current == id || history.Contains(id);
 
     void Awake()
     {
@@ -46,6 +57,7 @@ public class ScreenManager : MonoBehaviour
         screen.gameObject.SetActive(true);
         active.Add(screen);
         screen.OnOpen();
+        ScreenChanged?.Invoke(current, current, NavKind.Fresh);
     }
 
     void Update()
@@ -71,7 +83,7 @@ public class ScreenManager : MonoBehaviour
     {
         if (busy) return;
         history.Push(current);
-        Show(id, true);
+        Show(id, NavKind.Open);
     }
 
     public void OpenFresh(ScreenId id)
@@ -80,7 +92,7 @@ public class ScreenManager : MonoBehaviour
         history.Clear();
         // the main menu always has the title behind it, so Back there still goes somewhere
         if (id == ScreenId.MainMenu) history.Push(ScreenId.Title);
-        Show(id, true);
+        Show(id, NavKind.Fresh);
     }
 
     // the back arrow and the Escape key: the current screen gets the first say
@@ -97,13 +109,15 @@ public class ScreenManager : MonoBehaviour
     {
         if (busy) return;
         if (history.Count == 0) return;
-        Show(history.Pop(), false);
+        Show(history.Pop(), NavKind.Back);
     }
 
-    void Show(ScreenId id, bool forward)
+    void Show(ScreenId id, NavKind kind)
     {
+        ScreenId from = current;
         current = id;
-        StartCoroutine(Switch(Get(id), forward));
+        StartCoroutine(Switch(Get(id), kind != NavKind.Back));
+        ScreenChanged?.Invoke(from, id, kind);
     }
 
     IEnumerator Switch(UIScreen to, bool forward)
