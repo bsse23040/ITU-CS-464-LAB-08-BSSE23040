@@ -52,6 +52,7 @@ public class LevelSelectScreen : UIScreen
         {
             Tween.Shake((RectTransform)tiles[i].transform);
             Toast.Show("Finish sector " + i + " first");
+            UiFeedback.Error();
             return;
         }
         if (i == GameSession.level) return;
@@ -79,7 +80,6 @@ public class LevelSelectScreen : UIScreen
 
     void StartRun()
     {
-        GameSession.NewRun();
-        ScreenManager.Instance.Open(ScreenId.Gameplay);
+        ScreenManager.Instance.Open(ScreenId.Loading);
     }
 }

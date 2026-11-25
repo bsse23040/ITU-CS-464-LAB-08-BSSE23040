@@ -90,16 +90,14 @@ public class ResultsScreen : UIScreen
             int next = GameSession.level + 1;
             GameSession.level = next >= PlayerData.LevelCount ? 0 : next;
         }
-        GameSession.NewRun();
-        ScreenManager.Instance.OpenFresh(ScreenId.Gameplay);
+        ScreenManager.Instance.OpenFresh(ScreenId.Loading);
     }
 
     void OnLeft()
     {
         if (won)
         {
-            GameSession.NewRun();
-            ScreenManager.Instance.OpenFresh(ScreenId.Gameplay);
+            ScreenManager.Instance.OpenFresh(ScreenId.Loading);
         }
         else
         {
